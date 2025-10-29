@@ -27,25 +27,6 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    .move-button {
-        width: 100%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 0.75rem;
-        border-radius: 5px;
-        font-weight: bold;
-        cursor: pointer;
-    }
-    .status-alert {
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 0.5rem 0;
-        font-weight: bold;
-    }
-    .check-alert { background-color: #fff3cd; color: #856404; }
-    .checkmate-alert { background-color: #f8d7da; color: #721c24; }
-    .stalemate-alert { background-color: #d1ecf1; color: #0c5460; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -54,16 +35,8 @@ if 'board' not in st.session_state:
     st.session_state.board = chess.Board()
 if 'move_history' not in st.session_state:
     st.session_state.move_history = []
-if 'white_time' not in st.session_state:
-    st.session_state.white_time = 600  # 10 minutes
-if 'black_time' not in st.session_state:
-    st.session_state.black_time = 600
-if 'game_mode' not in st.session_state:
-    st.session_state.game_mode = 'Standard'
 if 'captured_pieces' not in st.session_state:
     st.session_state.captured_pieces = {'white': [], 'black': []}
-if 'move_times' not in st.session_state:
-    st.session_state.move_times = []
 
 # Piece symbols
 piece_symbols = {
@@ -80,7 +53,7 @@ def create_3d_chess_board():
     board = st.session_state.board
     fig = go.Figure()
     
-    # Create board base
+    # Create board using Mesh3d instead of Scatter3d with fill
     board_x = []
     board_y = []
     board_z = []
@@ -106,7 +79,7 @@ def create_3d_chess_board():
             board_y.extend(vertices_y)
             board_z.extend(vertices_z)
             
-            # Define faces
+            # Define faces (triangles)
             faces = [
                 [0, 1, 2], [0, 2, 3],  # Bottom
                 [4, 5, 6], [4, 6, 7],  # Top
@@ -168,11 +141,10 @@ def create_3d_chess_board():
                 piece_color = '#FFFFFF' if piece.color else '#2C2C2C'
                 piece_size = 40 if piece.piece_type == chess.KING else 35
                 
-                # Create 3D piece with shadow
                 fig.add_trace(go.Scatter3d(
                     x=[file + 0.5],
                     y=[rank + 0.5],
-                    z=[0.05],
+                    z=[0.6],
                     mode='text',
                     text=piece_symbols.get(piece_char, piece_char),
                     textfont=dict(
@@ -238,17 +210,12 @@ st.markdown('<div class="main-header">♟️ 3D Chess Arena ♔</div>', unsafe_a
 
 # Sidebar
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/ChessSet.jpg/300px-ChessSet.jpg", 
-             use_container_width=True)
-    
     st.markdown("### ⚙️ Game Settings")
     
     game_mode = st.selectbox(
         "Game Mode",
-        ["Standard", "Blitz (5min)", "Rapid (10min)", "Classical (30min)"],
-        index=["Standard", "Blitz (5min)", "Rapid (10min)", "Classical (30min)"].index(st.session_state.game_mode)
+        ["Standard", "Blitz (5min)", "Rapid (10min)", "Classical (30min)"]
     )
-    st.session_state.game_mode = game_mode
     
     st.markdown("---")
     st.markdown("### 📊 Game Statistics")
@@ -273,7 +240,6 @@ with st.sidebar:
             st.session_state.board = chess.Board()
             st.session_state.move_history = []
             st.session_state.captured_pieces = {'white': [], 'black': []}
-            st.session_state.move_times = []
             st.rerun()
     
     with col2:
@@ -283,9 +249,6 @@ with st.sidebar:
                 if st.session_state.move_history:
                     st.session_state.move_history.pop()
                 st.rerun()
-    
-    if st.button("🔀 Flip Board", use_container_width=True):
-        st.info("Rotate the 3D board with your mouse!")
     
     st.markdown("---")
     st.markdown("### 📜 Export Options")
@@ -307,7 +270,6 @@ col_left, col_center, col_right = st.columns([1, 3, 1])
 with col_left:
     st.markdown("### ⚪ White Pieces")
     
-    # Captured white pieces
     if st.session_state.captured_pieces['white']:
         captured_white = " ".join([piece_symbols.get(p, p) for p in st.session_state.captured_pieces['white']])
         st.markdown(f"**Captured:** {captured_white}")
@@ -315,8 +277,6 @@ with col_left:
         st.markdown("*No captures yet*")
     
     st.markdown("---")
-    
-    # Move suggestion
     st.markdown("### 💡 Legal Moves")
     square_check = st.text_input("Check square (e.g., e2):", key="square_check")
     if square_check:
@@ -374,7 +334,6 @@ with col_center:
         try:
             move = chess.Move.from_uci(move_input)
             if move in st.session_state.board.legal_moves:
-                # Track captured pieces
                 captured = st.session_state.board.piece_at(move.to_square)
                 if captured:
                     color = 'white' if captured.color else 'black'
@@ -382,12 +341,11 @@ with col_center:
                 
                 st.session_state.board.push(move)
                 st.session_state.move_history.append(move_input)
-                st.session_state.move_times.append(datetime.now())
                 st.success(f"✅ Move {move_input} executed!")
                 st.rerun()
             else:
                 st.error("❌ Illegal move! Please try again.")
-        except Exception as e:
+        except:
             st.error(f"❌ Invalid move format! Use UCI notation (e.g., e2e4)")
     
     if random_move:
@@ -397,14 +355,12 @@ with col_center:
             move = random.choice(legal_moves)
             st.session_state.board.push(move)
             st.session_state.move_history.append(move.uci())
-            st.session_state.move_times.append(datetime.now())
             st.success(f"🎲 Random move: {move.uci()}")
             st.rerun()
 
 with col_right:
     st.markdown("### ⚫ Black Pieces")
     
-    # Captured black pieces
     if st.session_state.captured_pieces['black']:
         captured_black = " ".join([piece_symbols.get(p, p) for p in st.session_state.captured_pieces['black']])
         st.markdown(f"**Captured:** {captured_black}")
@@ -412,8 +368,6 @@ with col_right:
         st.markdown("*No captures yet*")
     
     st.markdown("---")
-    
-    # Move history
     st.markdown("### 📋 Move History")
     if st.session_state.move_history:
         history_text = ""
@@ -427,7 +381,7 @@ with col_right:
     else:
         st.info("No moves yet. Start playing!")
 
-# Instructions expander
+# Instructions
 with st.expander("📖 How to Play"):
     st.markdown("""
     ### Game Controls
